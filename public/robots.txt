@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /recherche
+Allow: /villes
+Allow: /logement/
+Allow: /guides
+Allow: /aide
+Allow: /a-propos
+Disallow: /admin
+Disallow: /etudiant
+Disallow: /annonceur
+Disallow: /messagerie
+
+Sitemap: https://erikalog.netlify.app/sitemap.xml
