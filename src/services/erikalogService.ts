@@ -142,6 +142,48 @@ function saveState(state: LocalDatabaseState): void {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel('erikalog_live_sync');
+      ch.postMessage({ type: 'STATE_UPDATED', timestamp: Date.now() });
+      ch.close();
+    }
+  } catch {
+
+  }
+}
+
+export function reloadLocalStateFromStorage(): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as LocalDatabaseState;
+        if (parsed && Array.isArray(parsed.properties) && Array.isArray(parsed.profiles)) {
+          memoryState = parsed;
+        }
+      }
+    }
+  } catch {
+
+  }
+}
+
+export async function dispatchTransactionalEmail(payload: {
+  type: 'new_message' | 'viewing_request' | 'viewing_status' | 'property_moderation' | 'account_welcome';
+  recipientEmail: string;
+  recipientName?: string;
+  subject: string;
+  title: string;
+  message: string;
+  actionUrl?: string;
+}): Promise<void> {
+  try {
+    await withTimeout(
+      supabase.functions.invoke('erikalog-notify', {
+        body: payload,
+      }),
+      2500
+    );
   } catch {
 
   }

@@ -1,11 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { AppNotification, Profile, SiteSettings } from '../types/database';
+import { supabase } from '../lib/supabase';
 import {
   getActiveSessionUser,
   getPublicReferenceData,
   getUserConversations,
   getUserFavorites,
   getUserNotifications,
+  reloadLocalStateFromStorage,
   signInWithEmail,
   signOutUser,
   syncFromSupabase,
@@ -168,6 +170,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshState();
       }
     });
+  }, [refreshState]);
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel('erikalog-realtime-events')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notifications' },
+          () => {
+            syncFromSupabase().then(() => refreshState());
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'messages' },
+          () => {
+            syncFromSupabase().then(() => refreshState());
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'viewing_requests' },
+          () => {
+            syncFromSupabase().then(() => refreshState());
+          }
+        )
+        .subscribe();
+    } catch {
+      channel = null;
+    }
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('erikalog_live_sync');
+        bc.onmessage = () => {
+          reloadLocalStateFromStorage();
+          refreshState();
+        };
+      }
+    } catch {
+      bc = null;
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'erikalog_db_state_v1') {
+        reloadLocalStateFromStorage();
+        refreshState();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      if (bc) bc.close();
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [refreshState]);
 
   const login = useCallback(
